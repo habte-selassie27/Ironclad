@@ -632,7 +632,7 @@ If you have five minutes:
 **Category:** Standalone GenLayer Intelligent Contract  
 **Primitive:** Ironclad  
 **Purpose:** consensus-backed hostile-web-evidence intake  
-**Repository:** `https://github.com/ometere123/ironclad`  
+**Repository:** `https://github.com/habte-selassie27/Ironclad`  
 **Studionet contract:** `0xdd641B5bdBE8D9C14783b458425da180946Fe41c`
 
 Copy-ready submission notes are in [`SUBMISSION.md`](SUBMISSION.md).

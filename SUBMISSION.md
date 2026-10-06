@@ -12,7 +12,7 @@ Ironclad is a reusable consensus firewall that screens untrusted live web conten
 
 ## Repository and live evidence
 
-- Repository: `https://github.com/ometere123/ironclad`
+- Repository: `https://github.com/habte-selassie27/Ironclad`
 - Studionet contract: `0xdd641B5bdBE8D9C14783b458425da180946Fe41c`
 - Deployment transaction: `0x4e3dda328e0bfc325e45497944fd9c71b7ed898bc92571eba4bf0d12283b3b70`
 - Deployment state: `FINALIZED`, `MAJORITY_AGREE`

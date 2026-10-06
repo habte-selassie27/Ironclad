@@ -61,7 +61,7 @@ To verify parity in one step, normalize newlines before comparing:
 
 ```bash
 genlayer code 0xdd641B5bdBE8D9C14783b458425da180946Fe41c --rpc https://studio.genlayer.com/api > chain.txt
-curl -s https://raw.githubusercontent.com/ometere123/ironclad/main/contracts/ironclad.py > repo.py
+curl -s https://raw.githubusercontent.com/habte-selassie27/Ironclad/main/contracts/ironclad.py > repo.py
 python -c "
 chain = open('chain.txt','rb').read().replace(b'\r\n', b'\n')
 repo  = open('repo.py','rb').read()
@@ -92,7 +92,7 @@ The committed `tests/integration/test_ironclad_studionet.py` suite independently
 | Hostile evidence suppression | — | PASS; capsule `3` stored `excerpts: []` despite a `QUARANTINED` classification, confirming `excerpts_for_class` live |
 
 The hostile source is the public repository fixture:
-`https://raw.githubusercontent.com/ometere123/ironclad/main/fixtures/hostile_evidence.txt`
+`https://raw.githubusercontent.com/habte-selassie27/Ironclad/main/fixtures/hostile_evidence.txt`
 
 ## Live evidence for the availability binding
 

@@ -13,7 +13,7 @@ from gltest.assertions import tx_execution_succeeded
 CONTRACT = "ironclad.py"
 SAFE_URL = "https://example.com/"
 HOSTILE_URL = (
-    "https://raw.githubusercontent.com/ometere123/ironclad/main/"
+    "https://raw.githubusercontent.com/habte-selassie27/Ironclad/main/"
     "fixtures/hostile_evidence.txt"
 )
 PURPOSE = "Extract factual evidence describing the declared purpose of this page."
