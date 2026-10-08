@@ -1,154 +1,138 @@
-<p align="center"><img src="docs/images/explorer-contract-page.png" alt="Ironclad on GenLayer Studio" width="640"></p>
+[![Ironclad](docs/images/explorer-contract-page.png)](docs/images/explorer-contract-page.png)
 
-<h1 align="center">Ironclad</h1>
+# Ironclad
 
-<p align="center"><i>Don't let the page prompt the model.</i></p>
+*Evidence doesn't enter a contract on trust — it enters on a verdict.*
 
 ---
 
-## What you get
+## What this is
 
-A hostile webpage should never reach a downstream contract as raw "evidence". Ironclad sits in front of that handoff: you hand it a URL, it fetches the page inside GenLayer consensus, and it hands back a small, typed verdict you can gate on.
+A GenLayer Intelligent Contract whose single job is to sit between the open web and whatever contract wants to treat a webpage as evidence. You give it a URL. It gives you back a verdict you can build on, or it tells you the page can't be trusted.
 
-- every page is treated as an attack surface first;
-- validators re-read the page themselves — one model's opinion is never enough;
-- obvious "ignore your instructions" language can't settle safe, no matter the model;
-- the model reports findings; deterministic code writes the final state.
+Most evidence pipelines ask: *what does this page say?* Ironclad asks a different question first: *is this page trying to talk to the model?*
 
-## The pipeline
+## The bet
 
-```text
-you                Ironclad                       validators
- |                     |                              |
- |-- open_inspection ->|                              |
- |                     |-- fetch + classify (leader)  |
- |                     |----------------------------->|
- |                     |        fetch + classify again|
- |<--------------------|  agree on security dimensions
- |                     |                              |
- |-- resolve --------->|-- deterministic terminal state
- |                     |                              |
- |-- is_consumable? -->| true only if SAFE + grounded excerpts
-```
+Any page that will be read by an LLM is a potential attack surface. The same HTML that carries a useful fact can carry instructions aimed at the reader: override the governing prompt, impersonate a system role, exfiltrate secrets, invoke tools, transact, or hand off to a second instruction chain. Ironclad makes that a consensus problem instead of a prompting problem.
 
-Terminal states, and only these: `SAFE`, `SUSPICIOUS`, `QUARANTINED`, `UNAVAILABLE`, `CANCELLED`.
+## How a verdict is produced
 
-## Why the leader isn't trusted
+1. **Admission** — the URL is sanity-checked before anything fetches: public HTTPS only, no credentials, no ports, no private/loopback/link-local hosts, no obfuscated host spellings.
+2. **Leader** — fetches the page, bounds the text, runs a deterministic phrase floor, and asks the classifier for structured JSON. Excerpts must appear verbatim in what the leader saw. If the leader's own verdict isn't clean, it releases nothing.
+3. **Validators** — each one fetches and classifies the page *again*, in its own execution. They don't compare prose; they compare the security facts: reachability, whether hard risk exists, whether the literal floor fired, whether parsing failed, and the derived class. Every released excerpt is re-grounded in the validator's own snapshot, and each is independently judged passive and purpose-relevant.
+4. **Evidence binding** — if the leader says "nothing to release," validators check that claim against their own snapshots too. A clean page with releasable evidence can never settle as empty on the leader's say-so alone.
+5. **Settlement** — deterministic code maps the findings to a terminal state. The model never writes the state itself.
 
-The leader proposes. Validators dispose. Each validator:
+Possible end states: `SAFE`, `SUSPICIOUS`, `QUARANTINED`, `UNAVAILABLE`, `CANCELLED`.
 
-1. renders the URL itself, in its own execution;
-2. classifies that fresh snapshot on its own;
-3. checks the leader's fields are well-typed (booleans are booleans, masks are bounded integers, no unknown bits);
-4. compares security dimensions — reachability, hard-risk presence, literal-floor presence, parse failure, derived class — not prose;
-5. grounds every released excerpt in its own snapshot, so nothing quoted is invented;
-6. judges every excerpt as passive and relevant to the caller's purpose;
-7. if the leader released nothing, checks whether its own snapshot held releasable evidence — if so, the proposal is rejected.
+## Reading the verdict
 
-A proposal that disagrees on any security dimension is discarded. Rotation exhaustion leaves the capsule `PENDING`; it never force-settles.
-
-## Risk flags
-
-Ten bits, diagnostic only:
-
-`PROMPT_OVERRIDE` · `ROLE_IMPERSONATION` · `TASK_REDIRECTION` · `SECRET_EXFILTRATION` · `TOOL_OR_ACTION_COMMAND` · `OBFUSCATED_INSTRUCTION` · `HIDDEN_INSTRUCTION` · `EXTERNAL_INSTRUCTION_CHAIN` · `LITERAL_CONTROL_PHRASE` · `UNPARSABLE_ANALYSIS`
-
-Full dictionary on-chain via `get_risk_dictionary()`. Semantic bits, parse failures, or an unreadable source ⇒ quarantine. Literal floor only ⇒ suspicious. Clean ⇒ safe. Bits are labels — integrate on `status` / `is_consumable()`.
-
-## Surface area
+| You see | Meaning | What to do |
+|---|---|---|
+| `SAFE` + excerpts | validators agree the page posed no control attempt and released bounded excerpts | you may consume the excerpts |
+| `SAFE`, no excerpts | clean but nothing purpose-relevant | not consumable — wait for validators to confirm |
+| `SUSPICIOUS` | deterministic phrase floor fired | do not consume |
+| `QUARANTINED` | semantic risk or unparseable analysis | do not consume |
+| `UNAVAILABLE` | source unreadable | retry later |
+| `CANCELLED` | requester aborted | — |
 
 ```python
-open_inspection(url, purpose) -> u256   # create
-resolve(capsule_id)                     # settle (anyone, once)
-cancel(capsule_id)                      # requester only
-get_capsule(capsule_id) -> dict         # inspect
-is_consumable(capsule_id) -> bool       # the gate
-get_risk_dictionary() -> dict           # diagnostics
+if ironclad.view().is_consumable(capsule_id):
+    excerpts = ironclad.view().get_capsule(capsule_id)["excerpts"]
 ```
 
-## Where it runs
+`is_consumable` is the only gate that matters for automation. Risk bits are diagnostic labels — two honest validators may name the same attack differently, so never branch on an exact bit.
 
-| | |
-|---|---|
-| Network | Studionet |
-| Contract | `0xdd641B5bdBE8D9C14783b458425da180946Fe41c` |
-| Deploy tx | `0x4e3dda328e0bfc325e45497944fd9c71b7ed898bc92571eba4bf0d12283b3b70` |
-| State | `FINALIZED` / `MAJORITY_AGREE` |
-| CLI | GenLayer `0.39.2` |
+## On-chain facts
 
-Source parity was checked against the chain: `genlayer code` returns `contracts/ironclad.py` at commit `1dd86da0` (chain copy CRLF, repo copy LF — identical after normalization). A previous address pre-dates the excerpt-availability binding and is kept for audit only.
+```text
+network : Studionet
+address : 0xdd641B5bdBE8D9C14783b458425da180946Fe41c
+status  : FINALIZED, MAJORITY_AGREE
+source  : contracts/ironclad.py @ 1dd86da0 (parity-checked against the chain)
+```
 
-## Proof it works
+An earlier deployment predates the evidence-availability fix and survives only as an audit reference.
 
-| Check | Result |
-|---|---|
-| preflight | 86/86 |
-| Direct Mode | 26/26 |
-| genvm-lint 0.11.0 | exit 0 |
-| Studionet integration | 4/4 |
-| live safe page | SAFE, risk 0, consumable |
-| live hostile page | QUARANTINED, risk 265, empty excerpts |
+## Test posture
+
+- `python scripts/preflight.py` — standalone source/security gate, zero dependencies: **86/86**
+- `pytest tests/direct/ -v -s` — Direct Mode, forged-leader adversarial coverage included: **26/26**
+- `genvm-lint check contracts/ironclad.py` — AST lint + SDK validation, exit 0
+- `pytest tests/integration/ -v -s --network studionet` — live Studionet consensus: **4/4**
+
+Verified live: a safe page settles `SAFE` with a grounded excerpt and becomes consumable; the hostile fixture settles `QUARANTINED` with a risk mask of 265 and releases no excerpts.
 
 ```bash
-python scripts/preflight.py
-pip install -r requirements-test.txt && pytest tests/direct/ -v -s
-pip install -r requirements.txt && genvm-lint check contracts/ironclad.py
-pytest tests/integration/ -v -s --network studionet
-python scripts/deploy_studionet.py
+pip install -r requirements-test.txt   # Direct Mode
+pip install -r requirements.txt        # lint + integration extras
+python scripts/deploy_studionet.py     # deployments
 ```
 
-## Fail closed, always
+## Guarantee boundary
 
-Unreadable source → unavailable. Bad model JSON → quarantined. Literal tripwire → at least suspicious. Not SAFE → no excerpts. Forged types or unknown bits → rejected. Leader hid releasable evidence → rejected. Second resolve → rejected. No admin, no overrides, no exceptions.
+Ironclad decides one thing: *may this source be released forward as passive evidence without trying to control the reader?* It does not decide whether a claim is true, who is speaking, whether the source is fresh, or whether the excerpts are enough to move money. Those belong to layers that compose with it.
 
-## On-chain captures
+## Receipts
 
-<sub>GenLayer Studio, Studionet, 6 Oct 2026</sub>
+<details><summary>Explorer — deployed contract</summary>
+<img src="docs/images/explorer-contract-page.png" alt="Explorer contract page"></details>
 
-<p align="center"><img src="docs/images/studio-run-and-debug.png" alt="Run and Debug" width="480"><br><b>Run and Debug</b></p>
+<details><summary>Run and Debug — methods beside the consensus log</summary>
+<img src="docs/images/studio-run-and-debug.png" alt="Run and Debug panels"></details>
 
-<p align="center"><img src="docs/images/read-get-risk-dictionary.png" alt="risk dictionary" width="480"><br><b>get_risk_dictionary()</b></p>
+<details><summary>get_risk_dictionary() — the full flag set</summary>
+<img src="docs/images/read-get-risk-dictionary.png" alt="risk dictionary"></details>
 
-<p align="center"><img src="docs/images/read-get-capsule-pending.png" alt="pending capsule" width="480"><br><b>get_capsule(1) — pending</b></p>
+<details><summary>get_capsule(1) — while still pending</summary>
+<img src="docs/images/read-get-capsule-pending.png" alt="pending capsule"></details>
 
-<p align="center"><img src="docs/images/read-is-consumable-false.png" alt="not consumable yet" width="480"><br><b>is_consumable(1) — before settlement</b></p>
+<details><summary>is_consumable(1) — closed before settlement</summary>
+<img src="docs/images/read-is-consumable-false.png" alt="not consumable"></details>
 
-<p align="center"><img src="docs/images/read-get-capsule-safe.png" alt="safe capsule" width="480"><br><b>get_capsule(1) — SAFE</b></p>
+<details><summary>get_capsule(1) — settled SAFE with excerpt</summary>
+<img src="docs/images/read-get-capsule-safe.png" alt="safe capsule"></details>
 
-<p align="center"><img src="docs/images/read-is-consumable-true.png" alt="consumable" width="480"><br><b>is_consumable(1) — after settlement</b></p>
+<details><summary>is_consumable(1) — open after settlement</summary>
+<img src="docs/images/read-is-consumable-true.png" alt="consumable"></details>
 
-<p align="center"><img src="docs/images/write-open-inspection.png" alt="open" width="480"><br><b>open_inspection</b></p>
+<details><summary>open_inspection transaction</summary>
+<img src="docs/images/write-open-inspection.png" alt="open_inspection"></details>
 
-<p align="center"><img src="docs/images/write-resolve.png" alt="resolve" width="480"><br><b>resolve</b></p>
+<details><summary>resolve transaction</summary>
+<img src="docs/images/write-resolve.png" alt="resolve"></details>
 
-<p align="center"><img src="docs/images/write-open-inspection-for-cancel.png" alt="open for cancel" width="480"><br><b>second open_inspection</b></p>
+<details><summary>second open_inspection (cancel flow)</summary>
+<img src="docs/images/write-open-inspection-for-cancel.png" alt="second open_inspection"></details>
 
-<p align="center"><img src="docs/images/write-cancel.png" alt="cancel" width="480"><br><b>cancel</b></p>
+<details><summary>cancel transaction</summary>
+<img src="docs/images/write-cancel.png" alt="cancel"></details>
 
-<p align="center"><img src="docs/images/receipt-open-accepted.png" alt="open receipt" width="480"><br><b>open receipt</b></p>
+<details><summary>open receipt — accepted</summary>
+<img src="docs/images/receipt-open-accepted.png" alt="open accepted"></details>
 
-<p align="center"><img src="docs/images/receipt-resolve-accepted.png" alt="resolve receipt" width="480"><br><b>resolve receipt (dissent)</b></p>
+<details><summary>resolve receipt — accepted despite dissent</summary>
+<img src="docs/images/receipt-resolve-accepted.png" alt="resolve accepted"></details>
 
-<p align="center"><img src="docs/images/receipt-resolve-detail.png" alt="resolve header" width="480"><br><b>resolve receipt header</b></p>
+<details><summary>resolve receipt — header detail</summary>
+<img src="docs/images/receipt-resolve-detail.png" alt="resolve detail"></details>
 
-<p align="center"><img src="docs/images/receipt-resolve-finalized.png" alt="resolve finalized" width="480"><br><b>resolve finalized</b></p>
+<details><summary>resolve receipt — finalized</summary>
+<img src="docs/images/receipt-resolve-finalized.png" alt="resolve finalized"></details>
 
-<p align="center"><img src="docs/images/receipt-open2-accepted.png" alt="open2 receipt" width="480"><br><b>second open receipt</b></p>
+<details><summary>second open receipt — accepted</summary>
+<img src="docs/images/receipt-open2-accepted.png" alt="second open accepted"></details>
 
-<p align="center"><img src="docs/images/receipt-cancel-accepted.png" alt="cancel receipt" width="480"><br><b>cancel receipt</b></p>
+<details><summary>cancel receipt — accepted</summary>
+<img src="docs/images/receipt-cancel-accepted.png" alt="cancel accepted"></details>
 
-<p align="center"><img src="docs/images/receipt-cancel-detail.png" alt="cancel header" width="480"><br><b>cancel receipt header</b></p>
+<details><summary>cancel receipt — header detail</summary>
+<img src="docs/images/receipt-cancel-detail.png" alt="cancel detail"></details>
 
-<p align="center"><img src="docs/images/receipt-cancel-finalized.png" alt="cancel finalized" width="480"><br><b>cancel finalized</b></p>
-
-## Honestly, what it doesn't do
-
-- prove a claim true or a source authoritative;
-- catch every novel prompt-injection trick;
-- survive a malicious validator majority;
-- replace validator-side egress controls;
-- settle money on its own.
+<details><summary>cancel receipt — finalized</summary>
+<img src="docs/images/receipt-cancel-finalized.png" alt="cancel finalized"></details>
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — [`LICENSE`](LICENSE).
